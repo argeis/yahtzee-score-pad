@@ -1,5 +1,7 @@
-/* Yahtzee Score Pad service worker: caches the app shell so it works offline once installed. */
-const VERSION = 'yahtzee-v1';
+/* Yahtzee Score Pad service worker: caches the app shell so it works offline once installed.
+   Scoped to /yahtzee-score-pad/ and only ever touches caches with its own prefix, since Cache Storage is shared by every app on this origin. */
+const PREFIX = 'yahtzee-';
+const VERSION = PREFIX + 'v2';
 const SHELL = [
   './',
   './index.html',
@@ -16,7 +18,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
+    caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith(PREFIX) && k !== VERSION).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
