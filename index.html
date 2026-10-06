@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yahtzee Score Pad</title>
+<meta name="theme-color" content="#c9282d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Yahtzee">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Layout: a compact "what did you roll" strip on top, the classic score card below it as one scrollable table, players panel last. */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --panel-2: #f6f8fa;
+  --ink: #16202b;
+  --muted: #5b6875;
+  --line: #d3d9e0;
+  --accent: #c9282d;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe9ea;
+  --good: #2e7d4f;
+  --die: #fffdf7;
+  --pip: #1b1b1b;
+  --display: "Oswald", "Arial Narrow", Impact, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --shadow: 0 1px 2px rgba(22,32,43,.08), 0 6px 18px rgba(22,32,43,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12241b; --panel: #1a3326; --panel-2: #163022; --ink: #edf3ee; --muted: #9db3a5;
+    --line: #2c4a3b; --accent: #e8505a; --accent-ink: #ffffff; --accent-soft: #3a2a2d; --good: #7fd49d;
+    --die: #fffdf7; --pip: #1b1b1b; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12241b; --panel: #1a3326; --panel-2: #163022; --ink: #edf3ee; --muted: #9db3a5;
+  --line: #2c4a3b; --accent: #e8505a; --accent-ink: #ffffff; --accent-soft: #3a2a2d; --good: #7fd49d;
+  --die: #fffdf7; --pip: #1b1b1b; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--body); font-size: 16px; line-height: 1.4;
+  padding-inline: 16px; padding-block: 12px 40px;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, td.open:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 16px; }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 30px; letter-spacing: .02em; text-transform: uppercase; margin: 0; line-height: 1; }
+h1 span { color: var(--accent); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 14px; font-weight: 600; }
+.btn:hover { background: var(--panel-2); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.small { padding: 4px 10px; font-size: 14px; }
+
+/* Roll entry strip */
+.tray { background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); padding: 14px 16px; display: grid; gap: 12px; }
+.turn { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; font-size: 15px; color: var(--muted); align-items: baseline; }
+.turn b { color: var(--ink); font-weight: 700; }
+.turn .who { font-family: var(--display); font-size: 20px; text-transform: uppercase; letter-spacing: .03em; color: var(--accent); }
+.dice { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.die {
+  width: 56px; height: 56px; border-radius: 12px; border: 2px solid transparent;
+  background: var(--die); color: var(--pip);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.12), 0 2px 4px rgba(0,0,0,.2);
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); padding: 8px; gap: 2px;
+  position: relative;
+}
+.die .pip { width: 100%; aspect-ratio: 1; border-radius: 50%; background: transparent; place-self: center; max-width: 11px; }
+.die .pip.on { background: var(--pip); }
+.die.empty { background: var(--panel-2); color: var(--muted); border: 2px dashed var(--line); box-shadow: none; }
+.die.empty::after { content: ""; }
+.die.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), inset 0 -3px 0 rgba(0,0,0,.12); }
+.die.empty.sel { border-style: solid; }
+.faces { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.faces .lbl { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); flex-basis: 100%; text-align: center; }
+.face { width: 44px; height: 44px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); padding: 6px; gap: 1px; }
+.face .pip { width: 100%; aspect-ratio: 1; border-radius: 50%; background: transparent; place-self: center; max-width: 8px; }
+.face .pip.on { background: var(--ink); }
+.face:hover { border-color: var(--accent); background: var(--panel); }
+.trayActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hint { margin: 0; color: var(--muted); font-size: 14px; flex: 1 1 220px; min-width: 0; }
+
+/* Score card */
+.sheet { background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.scroll { overflow-x: auto; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 360px; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child {
+  text-align: left; position: sticky; left: 0; background: var(--panel); z-index: 1;
+  min-width: 150px; border-right: 1px solid var(--line);
+}
+thead th { font-family: var(--display); font-weight: 500; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--panel-2); border-bottom: 2px solid var(--line); }
+thead th:first-child { background: var(--panel-2); }
+thead th.cur { color: var(--accent); }
+thead th button { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; }
+td .how { display: block; font-size: 12px; color: var(--muted); font-weight: 400; white-space: normal; }
+td.label { font-weight: 600; }
+tr.group th { font-family: var(--display); font-weight: 500; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--panel-2); text-align: left; padding: 5px 10px; }
+tr.group th:first-child { background: var(--panel-2); }
+tr.total td { background: var(--panel-2); font-weight: 700; }
+tr.total td:first-child { background: var(--panel-2); }
+tr.grand td { font-family: var(--display); font-size: 20px; font-weight: 600; border-bottom: 0; }
+tr.grand td:first-child { font-family: var(--body); font-size: 16px; font-weight: 700; }
+td.cur { background: var(--accent-soft); }
+td.open { cursor: pointer; color: var(--muted); }
+td.open span { display: inline-block; border: 1px dashed var(--line); border-radius: 6px; padding: 1px 8px; min-width: 40px; text-align: center; }
+td.open:hover span { border-color: var(--accent); color: var(--accent); background: var(--panel); }
+td.blocked { cursor: not-allowed; }
+td.blocked span { opacity: .35; border-style: dotted; }
+td.blocked:hover span { border-color: var(--line); color: var(--muted); background: transparent; }
+td.filled { font-weight: 600; }
+td.zero { color: var(--muted); font-weight: 400; }
+td.zero::before { content: "– "; }
+td.pending { color: var(--muted); cursor: pointer; }
+td.hint { color: var(--muted); font-weight: 400; }
+td input { width: 64px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; text-align: right; font-variant-numeric: tabular-nums; }
+.bonusNote { font-size: 12px; color: var(--good); font-weight: 400; }
+.bonusNote.short { color: var(--muted); }
+
+/* Results banner */
+.results { background: var(--accent); color: var(--accent-ink); padding: 14px 16px; display: grid; gap: 4px; }
+.results h2 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 24px; text-transform: uppercase; letter-spacing: .03em; }
+.results ol { margin: 0; padding-left: 20px; }
+
+/* Players */
+.players { background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); padding: 14px 16px; display: grid; gap: 10px; }
+.players h2, .sheetHead h2 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 18px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.sheetHead { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.sheetHead span { color: var(--muted); font-size: 14px; }
+.plist { display: grid; gap: 8px; }
+.prow { display: flex; gap: 8px; align-items: center; }
+.prow input { flex: 1 1 120px; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--ink); font: inherit; }
+.prow .idx { font-family: var(--display); color: var(--muted); width: 22px; text-align: right; }
+
+/* Modal + toast */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 16px; z-index: 20; }
+.modal .card { background: var(--panel); color: var(--ink); border-radius: 14px; padding: 20px; max-width: 380px; width: 100%; display: grid; gap: 12px; box-shadow: var(--shadow); }
+.modal h3 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 22px; text-transform: uppercase; }
+.modal p { margin: 0; color: var(--muted); }
+.modal .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.modal .choices { display: flex; gap: 8px; flex-wrap: wrap; }
+.modal .choices .btn { min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+.modal .numrow { display: flex; gap: 8px; align-items: center; }
+.modal .numrow input { width: 90px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--ink); font: inherit; font-size: 18px; text-align: right; }
+#toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; max-width: calc(100% - 32px); text-align: center; z-index: 30; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#toast.show { opacity: 1; }
+
+@media (max-width: 480px) {
+  h1 { font-size: 26px; }
+  .die { width: 50px; height: 50px; }
+  .face { width: 40px; height: 40px; }
+  th, td { padding: 6px 8px; }
+  th:first-child, td:first-child { min-width: 130px; }
+}
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Yahtzee <span>Score Pad</span></h1>
+    <div class="actions">
+      <button class="btn" id="undoBtn" type="button">Undo</button>
+      <button class="btn" id="editBtn" type="button">Edit scores</button>
+      <button class="btn primary" id="newBtn" type="button">New game</button>
+    </div>
+  </header>
+
+  <section class="tray" aria-label="Enter your roll">
+    <div class="turn">
+      <span class="who" id="who">Player 1</span>
+      <span>Turn <b id="turnNo">1</b> of 13</span>
+    </div>
+    <div class="dice" id="dice"></div>
+    <div class="faces" id="faces"></div>
+    <div class="trayActions">
+      <button class="btn" id="clearBtn" type="button">Clear</button>
+      <p class="hint">Tap the five faces you rolled and every box shows what it would score. Or skip the dice and tap any box to enter a score by hand.</p>
+    </div>
+  </section>
+
+  <section class="sheet" aria-label="Score card">
+    <div id="results" hidden></div>
+    <div class="sheetHead">
+      <h2>Score card</h2>
+      <span id="sheetNote">Tap a box to score it</span>
+    </div>
+    <div class="scroll"><table id="table"></table></div>
+  </section>
+
+  <section class="players" aria-label="Players">
+    <h2>Players</h2>
+    <div class="plist" id="plist"></div>
+    <div><button class="btn small" id="addBtn" type="button">Add player</button></div>
+  </section>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="card" role="dialog" aria-labelledby="modalTitle">
+    <h3 id="modalTitle">New game?</h3>
+    <p>All scores will be cleared. Player names are kept.</p>
+    <div class="row">
+      <button class="btn" id="modalCancel" type="button">Cancel</button>
+      <button class="btn primary" id="modalOk" type="button">Start new game</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="picker" hidden>
+  <div class="card" role="dialog" aria-labelledby="pickTitle">
+    <h3 id="pickTitle">Aces</h3>
+    <p id="pickSub"></p>
+    <div class="choices" id="pickChoices"></div>
+    <div class="numrow" id="pickNum" hidden>
+      <input type="number" inputmode="numeric" id="pickInput" min="0" max="30" aria-label="Score">
+      <button class="btn primary" id="pickSave" type="button">Save</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="pickCancel" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+  const UPPER = [['ones','Aces',1],['twos','Twos',2],['threes','Threes',3],['fours','Fours',4],['fives','Fives',5],['sixes','Sixes',6]];
+  const LOWER = [
+    ['three','Three of a kind','Total of all dice'],
+    ['four','Four of a kind','Total of all dice'],
+    ['fullhouse','Full house','25'],
+    ['small','Small straight','30 · run of 4'],
+    ['large','Large straight','40 · run of 5'],
+    ['yahtzee','Yahtzee','50'],
+    ['chance','Chance','Total of all dice']
+  ];
+  const CATS = UPPER.map(u => u[0]).concat(LOWER.map(l => l[0]));
+  const NAME = {}; UPPER.forEach(u => NAME[u[0]] = u[1]); LOWER.forEach(l => NAME[l[0]] = l[1]);
+  const FIXED = { fullhouse: 25, small: 30, large: 40, yahtzee: 50 };
+  const MAX = { three:30, four:30, fullhouse:25, small:30, large:40, yahtzee:50, chance:30 };
+  UPPER.forEach(u => MAX[u[0]] = u[2] * 5);
+  const PIPS = { 1:[0,0,0,0,1,0,0,0,0], 2:[1,0,0,0,0,0,0,0,1], 3:[1,0,0,0,1,0,0,0,1], 4:[1,0,1,0,0,0,1,0,1], 5:[1,0,1,0,1,0,1,0,1], 6:[1,0,1,1,0,1,1,0,1] };
+  const KEY = 'yahtzee-pad-v2';
+
+  const $ = id => document.getElementById(id);
+  let S, editMode = false, toastTimer, sel = 0, pick = null;
+
+  function newPlayer(name) {
+    const scores = {}; CATS.forEach(c => scores[c] = null);
+    return { name, scores, ybonus: 0 };
+  }
+  function freshState(players) {
+    return { players: players || [newPlayer('Player 1'), newPlayer('Player 2')], current: 0, dice: [null,null,null,null,null], history: [] };
+  }
+  function load() {
+    try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.players && s.players.length) return s; } } catch (e) {}
+    return null;
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  function snapshot() {
+    S.history.push(JSON.stringify({ players: S.players, current: S.current, dice: S.dice }));
+    if (S.history.length > 60) S.history.shift();
+  }
+
+  /* ---------- Scoring rules ---------- */
+  function analyse(dice) {
+    const counts = [0,0,0,0,0,0,0]; let sum = 0;
+    dice.forEach(d => { counts[d]++; sum += d; });
+    const max = Math.max.apply(null, counts);
+    const has = n => counts[n] > 0;
+    const small = (has(1)&&has(2)&&has(3)&&has(4)) || (has(2)&&has(3)&&has(4)&&has(5)) || (has(3)&&has(4)&&has(5)&&has(6));
+    const large = (has(1)&&has(2)&&has(3)&&has(4)&&has(5)) || (has(2)&&has(3)&&has(4)&&has(5)&&has(6));
+    const fh = counts.indexOf(3) > 0 && counts.indexOf(2) > 0;
+    return { counts, sum, max, yz: max === 5, small, large, fh };
+  }
+  function scoreFor(cat, dice, p) {
+    const a = analyse(dice);
+    const joker = a.yz && p.scores.yahtzee !== null;
+    switch (cat) {
+      case 'ones': case 'twos': case 'threes': case 'fours': case 'fives': case 'sixes': {
+        const n = UPPER.find(u => u[0] === cat)[2]; return a.counts[n] * n;
+      }
+      case 'three': return a.max >= 3 ? a.sum : 0;
+      case 'four': return a.max >= 4 ? a.sum : 0;
+      case 'fullhouse': return (a.fh || joker) ? 25 : 0;
+      case 'small': return (a.small || joker) ? 30 : 0;
+      case 'large': return (a.large || joker) ? 40 : 0;
+      case 'yahtzee': return a.yz ? 50 : 0;
+      case 'chance': return a.sum;
+    }
+    return 0;
+  }
+  // Joker rule: an extra Yahtzee must go in the matching upper box if open, else any open lower box, else an upper box for 0.
+  function allowed(dice, p) {
+    const open = CATS.filter(c => p.scores[c] === null);
+    const a = analyse(dice);
+    if (!(a.yz && p.scores.yahtzee !== null)) return { set: new Set(open), reason: '' };
+    const up = UPPER[dice[0] - 1][0];
+    if (p.scores[up] === null) return { set: new Set([up]), reason: 'Joker rule: this Yahtzee must be scored in ' + NAME[up] };
+    const lower = LOWER.map(l => l[0]).filter(c => c !== 'yahtzee' && p.scores[c] === null);
+    if (lower.length) return { set: new Set(lower), reason: 'Joker rule: ' + NAME[up] + ' is taken, so score it in any lower box' };
+    return { set: new Set(open), reason: '' };
+  }
+  function totals(p) {
+    const up = UPPER.reduce((s, u) => s + (p.scores[u[0]] || 0), 0);
+    const bonus = up >= 63 ? 35 : 0;
+    const low = LOWER.reduce((s, l) => s + (p.scores[l[0]] || 0), 0) + p.ybonus * 100;
+    return { up, bonus, upTotal: up + bonus, low, grand: up + bonus + low };
+  }
+  const filled = p => CATS.filter(c => p.scores[c] !== null).length;
+  const done = p => filled(p) === 13;
+  const gameOver = () => S.players.every(done);
+  const diceReady = () => S.dice.every(d => d !== null);
+
+  /* ---------- Actions ---------- */
+  function commit(pi, cat, value, bonusYahtzee) {
+    const p = S.players[pi];
+    snapshot();
+    p.scores[cat] = value;
+    let msg = NAME[cat] + ': ' + value;
+    if (bonusYahtzee) { p.ybonus++; msg += ' · Yahtzee bonus +100!'; }
+    else if (cat === 'yahtzee' && value === 50) msg = 'YAHTZEE! 50';
+    S.dice = [null,null,null,null,null]; sel = 0;
+    nextPlayer();
+    toast(msg);
+    save(); render();
+  }
+  function tapCell(pi, cat) {
+    const p = S.players[pi];
+    if (gameOver()) return;
+    if (pi !== S.current) { S.current = pi; save(); render(); return; }
+    if (p.scores[cat] !== null) { toast('Already scored. Use Undo, or Edit scores to change it.'); return; }
+    if (diceReady()) {
+      const al = allowed(S.dice, p);
+      if (!al.set.has(cat)) { toast(al.reason); return; }
+      const a = analyse(S.dice);
+      commit(pi, cat, scoreFor(cat, S.dice, p), a.yz && p.scores.yahtzee === 50 && cat !== 'yahtzee');
+      return;
+    }
+    openPicker(pi, cat);
+  }
+  function nextPlayer() {
+    const n = S.players.length;
+    for (let k = 1; k <= n; k++) { const i = (S.current + k) % n; if (!done(S.players[i])) { S.current = i; return; } }
+  }
+  function setFace(v) {
+    S.dice[sel] = v;
+    const next = S.dice.findIndex((d, i) => i > sel && d === null);
+    sel = next >= 0 ? next : (S.dice.indexOf(null) >= 0 ? S.dice.indexOf(null) : Math.min(sel + 1, 4));
+    save(); render();
+  }
+  function clearDice() { S.dice = [null,null,null,null,null]; sel = 0; save(); render(); }
+  function undo() {
+    const raw = S.history.pop();
+    if (!raw) { toast('Nothing to undo'); return; }
+    const h = JSON.parse(raw); Object.assign(S, h); sel = 0;
+    save(); render(); toast('Undone');
+  }
+  function clampScore(cat, v) {
+    if (v === null) return null;
+    let val = Math.max(0, Math.min(MAX[cat], Math.round(Number(v)) || 0));
+    if (FIXED[cat]) val = val >= FIXED[cat] / 2 ? FIXED[cat] : 0;
+    return val;
+  }
+  function editScore(pi, cat, raw) {
+    const p = S.players[pi];
+    const v = raw.trim();
+    const val = v === '' ? null : clampScore(cat, v);
+    if (p.scores[cat] === val) return;
+    snapshot(); p.scores[cat] = val; save(); render();
+  }
+  function editBonus(pi, raw) {
+    const n = Math.max(0, Math.min(12, Math.round(Number(raw)) || 0));
+    if (S.players[pi].ybonus === n) return;
+    snapshot(); S.players[pi].ybonus = n; save(); render();
+  }
+
+  /* ---------- Manual score picker ---------- */
+  function openPicker(pi, cat) {
+    pick = { pi, cat };
+    const p = S.players[pi];
+    $('pickTitle').textContent = NAME[cat];
+    const ch = $('pickChoices'); ch.textContent = '';
+    const num = $('pickNum'); num.hidden = true;
+    const choose = v => { const bonus = cat !== 'yahtzee' && p.scores.yahtzee === 50 && pick.bonus; closePicker(); commit(pi, cat, v, bonus); };
+    const u = UPPER.find(x => x[0] === cat);
+    if (u) {
+      $('pickSub').textContent = 'How many ' + u[2] + 's did you roll? Scores ' + u[2] + ' each.';
+      for (let k = 0; k <= 5; k++) ch.appendChild(el('button', { type: 'button', class: 'btn' + (k ? '' : ''), text: k === 0 ? 'None (0)' : k + ' × ' + u[2] + ' = ' + (k * u[2]), onclick: () => choose(k * u[2]) }));
+    } else if (FIXED[cat]) {
+      $('pickSub').textContent = 'Did you make it?';
+      ch.appendChild(el('button', { type: 'button', class: 'btn primary', text: 'Yes, ' + FIXED[cat], onclick: () => choose(FIXED[cat]) }));
+      ch.appendChild(el('button', { type: 'button', class: 'btn', text: 'No, scratch (0)', onclick: () => choose(0) }));
+    } else {
+      $('pickSub').textContent = cat === 'chance' ? 'Add up all five dice.' : 'Did you make it? Enter the total of all five dice.';
+      ch.appendChild(el('button', { type: 'button', class: 'btn', text: 'Scratch (0)', onclick: () => choose(0) }));
+      num.hidden = false;
+      const inp = $('pickInput'); inp.value = ''; inp.min = '5'; inp.max = '30';
+      $('pickSave').onclick = () => { const v = inp.value.trim(); if (v === '') { toast('Enter the dice total'); return; } choose(Math.max(0, Math.min(30, Math.round(Number(v)) || 0))); };
+      inp.onkeydown = e => { if (e.key === 'Enter') $('pickSave').click(); };
+    }
+    $('picker').hidden = false;
+    if (!num.hidden) $('pickInput').focus(); else ch.firstChild.focus();
+  }
+  function closePicker() { $('picker').hidden = true; pick = null; }
+
+  /* ---------- Rendering ---------- */
+  function el(tag, props, children) {
+    const e = document.createElement(tag);
+    if (props) Object.keys(props).forEach(k => {
+      if (k === 'class') e.className = props[k];
+      else if (k === 'text') e.textContent = props[k];
+      else if (k.slice(0,2) === 'on') e.addEventListener(k.slice(2), props[k]);
+      else e.setAttribute(k, props[k]);
+    });
+    (children || []).forEach(c => e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+    return e;
+  }
+  function pipGrid(target, v) { PIPS[v].forEach(on => target.appendChild(el('span', { class: 'pip' + (on ? ' on' : '') }))); }
+  function renderDice() {
+    const box = $('dice'); box.textContent = '';
+    S.dice.forEach((d, i) => {
+      const die = el('button', { type: 'button', class: 'die' + (d === null ? ' empty' : '') + (i === sel ? ' sel' : ''),
+        'aria-label': 'Die ' + (i+1) + (d === null ? ', not set' : ', shows ' + d), 'aria-pressed': String(i === sel), onclick: () => { sel = i; render(); } });
+      if (d !== null) pipGrid(die, d);
+      box.appendChild(die);
+    });
+    const faces = $('faces'); faces.textContent = '';
+    faces.appendChild(el('span', { class: 'lbl', text: 'Die ' + (sel + 1) + ' shows' }));
+    for (let v = 1; v <= 6; v++) {
+      const b = el('button', { type: 'button', class: 'face', 'aria-label': String(v), onclick: () => setFace(v) });
+      pipGrid(b, v); faces.appendChild(b);
+    }
+    const cur = S.players[S.current];
+    $('who').textContent = gameOver() ? 'Game over' : cur.name;
+    $('turnNo').textContent = Math.min(13, filled(cur) + 1);
+  }
+  function cell(pi, cat) {
+    const p = S.players[pi], v = p.scores[cat], isCur = pi === S.current && !gameOver();
+    const td = el('td', { class: isCur ? 'cur' : '' });
+    if (editMode) {
+      const inp = el('input', { type: 'number', inputmode: 'numeric', min: '0', max: String(MAX[cat]), id: 'e-' + pi + '-' + cat, 'aria-label': p.name + ' ' + NAME[cat], onchange: e => editScore(pi, cat, e.target.value) });
+      if (v !== null) inp.value = v;
+      td.appendChild(inp); return td;
+    }
+    if (v !== null) { td.classList.add('filled'); if (v === 0) td.classList.add('zero'); td.textContent = v; return td; }
+    td.setAttribute('tabindex', '0'); td.setAttribute('role', 'button');
+    td.addEventListener('click', () => tapCell(pi, cat));
+    td.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapCell(pi, cat); } });
+    if (isCur && diceReady()) {
+      const al = allowed(S.dice, p);
+      td.classList.add('open'); if (!al.set.has(cat)) td.classList.add('blocked');
+      td.appendChild(el('span', { text: String(scoreFor(cat, S.dice, p)) }));
+      return td;
+    }
+    td.classList.add('pending'); td.textContent = '·';
+    return td;
+  }
+  function renderTable() {
+    const t = $('table'); t.textContent = '';
+    const n = S.players.length, over = gameOver();
+    const thead = el('thead'); const hr = el('tr'); hr.appendChild(el('th', { text: 'Category' }));
+    S.players.forEach((p, i) => {
+      const th = el('th', { class: (i === S.current && !over) ? 'cur' : '' });
+      th.appendChild(el('button', { type: 'button', text: p.name, title: 'Make it ' + p.name + "'s turn", onclick: () => { S.current = i; save(); render(); } }));
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr); t.appendChild(thead);
+    const tb = el('tbody');
+    const group = label => { const tr = el('tr', { class: 'group' }); tr.appendChild(el('th', { colspan: String(n + 1), text: label })); tb.appendChild(tr); };
+    const row = (cls, label, how, cells) => {
+      const tr = el('tr', { class: cls });
+      const td = el('td', { class: 'label' }, [label]); if (how) td.appendChild(el('span', { class: 'how', text: how }));
+      tr.appendChild(td); cells.forEach(c => tr.appendChild(c)); tb.appendChild(tr);
+    };
+    const tot = S.players.map(totals);
+    group('Upper section');
+    UPPER.forEach(u => row('', u[1], 'Count of ' + u[2] + 's × ' + u[2], S.players.map((p, i) => cell(i, u[0]))));
+    row('total', 'Upper total', '', tot.map(x => el('td', { text: String(x.up) })));
+    row('total', 'Bonus', '35 if 63 or more', tot.map((x, i) => {
+      const td = el('td', { text: String(x.bonus) });
+      if (x.bonus) td.appendChild(el('span', { class: 'bonusNote', text: ' ✓' }));
+      else if (!done(S.players[i])) td.appendChild(el('span', { class: 'bonusNote short', text: ' need ' + (63 - x.up) }));
+      return td;
+    }));
+    group('Lower section');
+    LOWER.forEach(l => row('', l[1], l[2], S.players.map((p, i) => cell(i, l[0]))));
+    row('', 'Yahtzee bonus', '100 each extra Yahtzee', S.players.map((p, i) => {
+      if (editMode) { const td = el('td'); const inp = el('input', { type: 'number', min: '0', max: '12', id: 'e-' + i + '-ybonus', 'aria-label': p.name + ' Yahtzee bonus count', title: 'Number of bonus Yahtzees', onchange: e => editBonus(i, e.target.value) }); inp.value = p.ybonus; td.appendChild(inp); td.appendChild(el('span', { class: 'how', text: '× 100' })); return td; }
+      const td = el('td', { class: p.ybonus ? 'filled' : 'hint', text: p.ybonus ? String(p.ybonus * 100) : '0' });
+      if (!editMode && p.scores.yahtzee === 50 && !done(p)) {
+        td.title = 'Tap to add a bonus Yahtzee'; td.style.cursor = 'pointer';
+        td.addEventListener('click', () => { snapshot(); p.ybonus++; save(); render(); toast('Yahtzee bonus +100! Now score the dice in another box.'); });
+      }
+      return td;
+    }));
+    row('total', 'Lower total', '', tot.map(x => el('td', { text: String(x.low) })));
+    row('total grand', 'Grand total', '', tot.map(x => el('td', { text: String(x.grand) })));
+    t.appendChild(tb);
+  }
+  function renderResults() {
+    const r = $('results');
+    if (!gameOver()) { r.hidden = true; r.textContent = ''; return; }
+    const ranked = S.players.map(p => ({ name: p.name, grand: totals(p).grand })).sort((a, b) => b.grand - a.grand);
+    const tie = ranked.length > 1 && ranked[0].grand === ranked[1].grand;
+    r.className = 'results'; r.textContent = '';
+    r.appendChild(el('h2', { text: tie ? 'It’s a tie!' : ranked[0].name + ' wins' }));
+    const ol = el('ol'); ranked.forEach(x => ol.appendChild(el('li', { text: x.name + ' — ' + x.grand })));
+    r.appendChild(ol); r.hidden = false;
+  }
+  function renderPlayers() {
+    const list = $('plist'); list.textContent = '';
+    S.players.forEach((p, i) => {
+      const inp = el('input', { type: 'text', maxlength: '16', id: 'name-' + i, 'aria-label': 'Player ' + (i+1) + ' name',
+        onchange: e => { const v = e.target.value.trim() || 'Player ' + (i+1); p.name = v; e.target.value = v; save(); render(); } });
+      inp.value = p.name;
+      const rm = el('button', { type: 'button', class: 'btn small', text: 'Remove', onclick: () => {
+        if (S.players.length === 1) { toast('Keep at least one player'); return; }
+        snapshot(); S.players.splice(i, 1); if (S.current >= S.players.length) S.current = 0; save(); render();
+      } });
+      list.appendChild(el('div', { class: 'prow' }, [el('span', { class: 'idx', text: String(i+1) }), inp, rm]));
+    });
+    $('addBtn').disabled = S.players.length >= 6;
+  }
+  function render() {
+    renderDice(); renderResults(); renderTable(); renderPlayers();
+    $('undoBtn').disabled = S.history.length === 0;
+    $('editBtn').textContent = editMode ? 'Done editing' : 'Edit scores';
+    $('editBtn').classList.toggle('primary', editMode);
+    $('sheetNote').textContent = editMode ? 'Type a score, or clear a box to reopen it' : (gameOver() ? 'Final scores' : (diceReady() ? 'Tap a dashed score to take it' : 'Tap a box to score it'));
+  }
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  /* ---------- Wiring ---------- */
+  $('clearBtn').addEventListener('click', clearDice);
+  $('undoBtn').addEventListener('click', undo);
+  $('editBtn').addEventListener('click', () => { editMode = !editMode; render(); });
+  $('addBtn').addEventListener('click', () => { if (S.players.length >= 6) return; snapshot(); S.players.push(newPlayer('Player ' + (S.players.length + 1))); save(); render(); });
+  $('newBtn').addEventListener('click', () => { $('modal').hidden = false; $('modalCancel').focus(); });
+  $('modalCancel').addEventListener('click', () => { $('modal').hidden = true; });
+  $('modalOk').addEventListener('click', () => {
+    S = freshState(S.players.map(p => newPlayer(p.name))); editMode = false; sel = 0; $('modal').hidden = true; save(); render(); toast('New game. ' + S.players[0].name + ' goes first.');
+  });
+  $('pickCancel').addEventListener('click', closePicker);
+  $('picker').addEventListener('click', e => { if (e.target === $('picker')) closePicker(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { $('modal').hidden = true; closePicker(); return; }
+    if (e.target.tagName === 'INPUT' || !$('picker').hidden || !$('modal').hidden) return;
+    if (e.key >= '1' && e.key <= '6') setFace(Number(e.key));
+  });
+
+  function start(hot) {
+    S = (hot && hot.players) ? hot : (load() || freshState());
+    if (!S.dice) S.dice = [null,null,null,null,null];
+    try { window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(() => S); } catch (e) {}
+    render();
+  }
+  try {
+    if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start);
+    else start(window.claude && window.claude.hot ? window.claude.hot.data : null);
+  } catch (e) { start(null); }
+
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+  }
+})();
+</script>
+</body>
+</html>
